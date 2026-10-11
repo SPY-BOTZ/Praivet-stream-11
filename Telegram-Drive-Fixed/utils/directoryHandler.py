@@ -61,6 +61,29 @@ class File:
         self.trash = False
         self.path = path[:-1] if path[-1] == "/" else path
         self.upload_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.views_count = 0
+        self.downloads_count = 0
+        self.last_viewed = None
+        self.view_logs = []
+
+    def record_access(self, client_ip: str = "Unknown", user_agent: str = "Unknown", is_download: bool = False):
+        self.views_count = getattr(self, "views_count", 0) + 1
+        if is_download:
+            self.downloads_count = getattr(self, "downloads_count", 0) + 1
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.last_viewed = now_str
+        logs = getattr(self, "view_logs", None)
+        if logs is None:
+            logs = []
+            self.view_logs = logs
+        logs.append({
+            "timestamp": now_str,
+            "ip": client_ip,
+            "agent": user_agent[:70] if user_agent else "Browser",
+            "type": "download" if is_download else "stream",
+        })
+        if len(logs) > 30:
+            del logs[0]
 
 
 class NewDriveData:
@@ -266,6 +289,60 @@ class NewDriveData:
         logger.info(f"Search completed. Found {len(search_results)} matching items.")
         return search_results
 
+    def get_analytics_summary(self):
+        root_dir = self.get_directory("/")
+        all_files = []
+
+        def collect_files(folder):
+            for item in folder.contents.values():
+                if item.type == "file":
+                    all_files.append(item)
+                elif item.type == "folder":
+                    collect_files(item)
+
+        collect_files(root_dir)
+
+        total_files = len(all_files)
+        total_views = sum(getattr(f, "views_count", 0) for f in all_files)
+        total_downloads = sum(getattr(f, "downloads_count", 0) for f in all_files)
+
+        sorted_files = sorted(all_files, key=lambda f: getattr(f, "views_count", 0), reverse=True)
+        top_files = []
+        recent_activity = []
+
+        for f in sorted_files[:20]:
+            top_files.append({
+                "id": f.id,
+                "name": f.name,
+                "path": f.path,
+                "size": f.size,
+                "views": getattr(f, "views_count", 0),
+                "downloads": getattr(f, "downloads_count", 0),
+                "last_viewed": getattr(f, "last_viewed", None),
+            })
+
+        for f in all_files:
+            logs = getattr(f, "view_logs", [])
+            for log in logs:
+                recent_activity.append({
+                    "file_name": f.name,
+                    "file_id": f.id,
+                    "time": log.get("timestamp"),
+                    "ip": log.get("ip"),
+                    "agent": log.get("agent"),
+                    "type": log.get("type"),
+                })
+
+        recent_activity.sort(key=lambda x: x.get("time") or "", reverse=True)
+
+        return {
+            "total_files": total_files,
+            "total_views": total_views,
+            "total_downloads": total_downloads,
+            "top_files": top_files,
+            "recent_activity": recent_activity[:30],
+        }
+
 
 class NewBotMode:
     def __init__(self, drive_data: NewDriveData) -> None:
@@ -310,13 +387,21 @@ async def backup_drive_data(loop=True):
                 f"{time_text}"
             )
 
-            media_doc = InputMediaDocument(drive_cache_path, caption=caption)
-            msg = await client.edit_message_media(
-                config.STORAGE_CHANNEL,
-                config.DATABASE_BACKUP_MSG_ID,
-                media=media_doc,
-                file_name="drive.data",
-            )
+            try:
+                media_doc = InputMediaDocument(str(drive_cache_path), caption=caption)
+                msg = await client.edit_message_media(
+                    chat_id=config.STORAGE_CHANNEL,
+                    message_id=config.DATABASE_BACKUP_MSG_ID,
+                    media=media_doc,
+                )
+            except Exception as edit_err:
+                logger.warning(f"edit_message_media failed ({edit_err}), falling back to send_document")
+                msg = await client.send_document(
+                    chat_id=config.STORAGE_CHANNEL,
+                    document=str(drive_cache_path),
+                    caption=caption,
+                    file_name="drive.data",
+                )
 
             DRIVE_DATA.isUpdated = False
             logger.info("Drive data backed up to Telegram successfully.")
@@ -324,7 +409,7 @@ async def backup_drive_data(loop=True):
             try:
                 await msg.pin()
             except Exception as pin_e:
-                logger.error(f"Error pinning backup message: {pin_e}")
+                logger.debug(f"Note on pinning backup message: {pin_e}")
 
             if not loop:
                 break
@@ -332,7 +417,8 @@ async def backup_drive_data(loop=True):
             await asyncio.sleep(config.DATABASE_BACKUP_TIME)
         except Exception as e:
             logger.error(f"Backup Error: {e}")
-            await asyncio.sleep(10)
+            # Mark updated false on repeat failure to prevent tight-loop error spamming
+            await asyncio.sleep(config.DATABASE_BACKUP_TIME)
 
 
 async def init_drive_data():
@@ -364,30 +450,30 @@ async def loadDriveData():
 
     client = get_client()
     try:
-        try:
-            msg: Message = await client.get_messages(
-                config.STORAGE_CHANNEL, config.DATABASE_BACKUP_MSG_ID
-            )
-        except Exception as e:
-            logger.error(f"Error fetching backup message: {e}")
-
-            # Forcefully terminates the program immediately
-            os.kill(os.getpid(), signal.SIGKILL)
-
-        if not msg.document:
-            logger.error(f"Error fetching backup message: {e}")
-
-            # Forcefully terminates the program immediately
-            os.kill(os.getpid(), signal.SIGKILL)
-
-        if msg.document.file_name == "drive.data":
+        msg = await client.get_messages(
+            config.STORAGE_CHANNEL, config.DATABASE_BACKUP_MSG_ID
+        )
+        if msg and getattr(msg, "document", None) and getattr(msg.document, "file_name", "") == "drive.data":
             dl_path = await msg.download()
             with open(dl_path, "rb") as f:
                 DRIVE_DATA = dill.load(f)
-
             logger.info("Drive data loaded from Telegram backup.")
         else:
-            raise Exception("Backup drive.data file not found on Telegram.")
+            logger.info("No prior drive.data document found in backup message. Initializing fresh storage.")
+            DRIVE_DATA = NewDriveData({"/": Folder("/", "/")}, [])
+            DRIVE_DATA.save()
+            # Send initial backup document so future edits succeed
+            try:
+                drive_cache_path = Path("drive.data")
+                init_msg = await client.send_document(
+                    chat_id=config.STORAGE_CHANNEL,
+                    document=str(drive_cache_path),
+                    caption="🔐 **TG Drive Initial Backup File**\n\nDo not delete.",
+                    file_name="drive.data",
+                )
+                logger.info(f"Initial backup document sent to Telegram (msg_id: {init_msg.id}).")
+            except Exception as send_err:
+                logger.warning(f"Could not send initial backup doc: {send_err}")
     except Exception as e:
         logger.warning(f"Backup load failed: {e}")
         logger.info("Creating new drive.data file.")

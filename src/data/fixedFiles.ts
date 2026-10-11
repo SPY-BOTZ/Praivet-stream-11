@@ -183,6 +183,33 @@ async def current_folder_handler(client: Client, message: Message):
     )
 
 @main_bot.on_message(
+    filters.command(["stats", "views"])
+    & filters.private
+    & filters.user(config.TELEGRAM_ADMIN_IDS),
+)
+async def stats_handler(client: Client, message: Message):
+    global DRIVE_DATA
+    analytics = DRIVE_DATA.get_analytics_summary()
+    total_files = analytics.get("total_files", 0)
+    total_views = analytics.get("total_views", 0)
+    total_downloads = analytics.get("total_downloads", 0)
+    top_files = analytics.get("top_files", [])
+
+    text = (
+        "📊 **TG Drive File Views & Analytics**\\n\\n"
+        f"📁 **Total Files:** \`{total_files}\`\\n"
+        f"👁 **Total Views / Streams:** \`{total_views}\`\\n"
+        f"📥 **Total Downloads:** \`{total_downloads}\`\\n\\n"
+        "🔥 **Top Most Viewed Files:**\\n"
+    )
+    for idx, f in enumerate(top_files[:7], start=1):
+        text += f"{idx}. **{f['name']}** (👁 \`{f['views']} views\` | 📥 \`{f['downloads']} dl\`)\\n"
+
+    base_url = get_base_url()
+    buttons = [[InlineKeyboardButton("🌐 Open Web Analytics", url=f"{base_url}/")]] if base_url else None
+    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons) if buttons else None)
+
+@main_bot.on_message(
     filters.private
     & filters.user(config.TELEGRAM_ADMIN_IDS)
     & (

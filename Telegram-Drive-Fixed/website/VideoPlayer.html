@@ -187,6 +187,10 @@
         <div class="controls-panel">
             <div class="file-info-bar">
                 <span id="file-title" class="file-name">Loading file stream...</span>
+                <span id="file-stats-badge" style="background:#1f2937;padding:4px 12px;border-radius:20px;font-size:0.75rem;color:#34d399;border:1px solid #374151;display:inline-flex;align-items:center;gap:6px;">
+                    <span>👁</span>
+                    <span id="view-count">Loading views...</span>
+                </span>
             </div>
 
             <div class="buttons-grid">
@@ -278,6 +282,26 @@
             // Setup buttons
             document.getElementById('btn-download').href = downloadUrl;
             document.getElementById('btn-vlc').href = 'vlc://' + streamUrl;
+
+            // Fetch live view count for this file
+            try {
+                const u = new URL(streamUrl, window.location.origin);
+                const pathParam = u.searchParams.get('path');
+                if (pathParam) {
+                    fetch('/api/fileStats?path=' + encodeURIComponent(pathParam))
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data && data.file) {
+                                const views = data.file.views || 1;
+                                const dls = data.file.downloads || 0;
+                                document.getElementById('view-count').innerText = `${views} views • ${dls} dl`;
+                            }
+                        })
+                        .catch(() => {
+                            document.getElementById('view-count').innerText = '1 view';
+                        });
+                }
+            } catch(e) {}
 
             // Load media
             nativeVideo.load();

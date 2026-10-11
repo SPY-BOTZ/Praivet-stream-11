@@ -37,12 +37,12 @@ app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 logger = Logger(__name__)
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def home_page():
     return FileResponse("website/home.html")
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health_check():
     from utils.clients import multi_clients, premium_clients, work_loads
     from utils.streamer.custom_dl import _BG_PRODUCER_TASKS
@@ -69,7 +69,7 @@ async def health_check():
     })
 
 
-@app.get("/stream")
+@app.api_route("/stream", methods=["GET", "HEAD"])
 async def stream_page():
     return FileResponse("website/VideoPlayer.html")
 
@@ -99,7 +99,51 @@ async def dl_file(request: Request):
 
     force_download = request.query_params.get("download", "").lower() in ["1", "true", "yes"] or \
                      request.query_params.get("dl", "").lower() in ["1", "true", "yes"]
+
+    # Record view and member access analytics
+    try:
+        client_ip = request.client.host if request.client else "Unknown"
+        # Check forward headers if behind proxy/Koyeb
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+        user_agent = request.headers.get("user-agent", "Unknown")
+        file.record_access(client_ip=client_ip, user_agent=user_agent, is_download=force_download)
+        DRIVE_DATA.isUpdated = True
+    except Exception as track_err:
+        logger.warning(f"Failed to record access metrics: {track_err}")
+
     return await media_streamer(STORAGE_CHANNEL, file.file_id, file.name, request, force_download=force_download)
+
+
+@app.get("/api/analytics")
+async def get_analytics(request: Request):
+    from utils.directoryHandler import DRIVE_DATA
+    return JSONResponse(DRIVE_DATA.get_analytics_summary())
+
+
+@app.get("/api/fileStats")
+async def get_file_stats(request: Request):
+    from utils.directoryHandler import DRIVE_DATA
+    path = request.query_params.get("path")
+    if not path:
+        return JSONResponse({"status": "error", "message": "Missing path parameter"}, status_code=400)
+    try:
+        file = DRIVE_DATA.get_file(path)
+        return JSONResponse({
+            "status": "ok",
+            "file": {
+                "id": file.id,
+                "name": file.name,
+                "size": file.size,
+                "views": getattr(file, "views_count", 0),
+                "downloads": getattr(file, "downloads_count", 0),
+                "last_viewed": getattr(file, "last_viewed", None),
+                "recent_logs": getattr(file, "view_logs", []),
+            }
+        })
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=404)
 
 
 # Api Routes

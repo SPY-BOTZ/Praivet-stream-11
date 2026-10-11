@@ -22,13 +22,15 @@ import {
   Zap,
   RefreshCw,
   Eye,
-  Activity
+  Activity,
+  BarChart3
 } from 'lucide-react';
 import { FIXED_FILES, FixedFile } from './data/fixedFiles';
 import BotHealthDashboard from './components/BotHealthDashboard';
+import FileViewsAnalytics from './components/FileViewsAnalytics';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'bot_simulator' | 'files' | 'stream_tester' | 'deploy'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'views' | 'bot_simulator' | 'files' | 'stream_tester' | 'deploy'>('overview');
   const [selectedFile, setSelectedFile] = useState<FixedFile>(FIXED_FILES[0]);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -151,6 +153,18 @@ SLEEP_THRESHOLD=60
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
           </button>
           <button
+            onClick={() => setActiveTab('views')}
+            className={`px-4 py-2.5 font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
+              activeTab === 'views'
+                ? 'border-emerald-400 text-emerald-400 bg-emerald-500/5'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Eye className="w-4 h-4 text-cyan-400" />
+            Member Views & Analytics
+            <span className="px-1.5 py-0.2 text-[10px] bg-cyan-500/20 text-cyan-300 rounded font-semibold">New</span>
+          </button>
+          <button
             onClick={() => setActiveTab('bot_simulator')}
             className={`px-4 py-2.5 font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
               activeTab === 'bot_simulator'
@@ -234,6 +248,13 @@ SLEEP_THRESHOLD=60
                     <Activity className="w-4 h-4 text-emerald-400" />
                     Live Health Dashboard
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('views')}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm border border-slate-700 transition-all shadow"
+                  >
+                    <Eye className="w-4 h-4 text-cyan-400" />
+                    Member Views Tracker
                   </button>
                   <button
                     onClick={() => setActiveTab('bot_simulator')}
@@ -384,6 +405,9 @@ SLEEP_THRESHOLD=60
 
         {/* TAB: BOT HEALTH DASHBOARD */}
         {activeTab === 'health' && <BotHealthDashboard />}
+
+        {/* TAB: MEMBER VIEWS & FILE ANALYTICS */}
+        {activeTab === 'views' && <FileViewsAnalytics />}
 
         {/* TAB 2: BOT MODE SIMULATOR */}
         {activeTab === 'bot_simulator' && (
@@ -874,42 +898,137 @@ SLEEP_THRESHOLD=60
 
             {/* Step-by-Step Deployment Instructions */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Server className="w-5 h-5 text-cyan-400" />
-                Deployment Steps (Koyeb / Render / VPS / Docker)
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Server className="w-5 h-5 text-cyan-400" />
+                  Koyeb Specific Deployment Guide (कॉयब पर कैसे चलाएं)
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold">
+                  Port: 8000 • 0.0.0.0
+                </span>
+              </div>
 
-              <div className="space-y-3 text-xs text-slate-300">
-                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1">
-                  <div className="font-bold text-white text-sm">Step 1: Extract Zip & Configure .env</div>
-                  <p>
-                    <code className="text-emerald-400">Telegram-Drive-Fixed.zip</code> ko unzip karein. <code className="text-emerald-400">sample.env</code> ko rename karke <code className="text-emerald-400">.env</code> banayein aur apna Telegram Bot Token, Storage Channel ID, aur WEBSITE_URL dalein.
-                  </p>
-                </div>
-
-                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1">
-                  <div className="font-bold text-white text-sm">Step 2: Install Python Dependencies</div>
-                  <div className="font-mono bg-slate-900 p-2 rounded text-slate-200 select-all">
-                    pip install -r requirements.txt
-                  </div>
-                </div>
-
-                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1">
-                  <div className="font-bold text-white text-sm">Step 3: Run the Bot & Website Server</div>
-                  <div className="font-mono bg-slate-900 p-2 rounded text-slate-200 select-all">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <div className="text-slate-400 font-mono text-[11px]">1. RUN COMMAND</div>
+                  <div className="font-mono text-emerald-400 font-bold bg-slate-900 p-2 rounded border border-slate-800 select-all">
                     python3 start_main.py
                   </div>
-                  <p className="text-slate-400">Or use uvicorn directly:</p>
-                  <div className="font-mono bg-slate-900 p-2 rounded text-slate-200 select-all">
-                    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-                  </div>
+                  <p className="text-[11px] text-slate-500">Ya seedhe: <code className="text-slate-300">uvicorn main:app --host 0.0.0.0 --port 8000</code></p>
                 </div>
 
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <div className="text-slate-400 font-mono text-[11px]">2. EXPOSED PORT</div>
+                  <div className="font-mono text-cyan-400 font-bold bg-slate-900 p-2 rounded border border-slate-800">
+                    8000
+                  </div>
+                  <p className="text-[11px] text-slate-500">Protocol: HTTP, Path: <code className="text-slate-300">/</code></p>
+                </div>
+
+                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+                  <div className="text-slate-400 font-mono text-[11px]">3. RECOMMENDED REGION</div>
+                  <div className="font-mono text-purple-400 font-bold bg-slate-900 p-2 rounded border border-slate-800">
+                    fra (Frankfurt / Europe)
+                  </div>
+                  <p className="text-[11px] text-slate-500">Telegram DC4/DC2 ke paas hone se streaming latency &lt;25ms hoti hai!</p>
+                </div>
+              </div>
+
+              {/* Koyeb Environment Variables Table */}
+              <div className="space-y-2 pt-2">
+                <div className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center justify-between">
+                  <span>Koyeb me daalne wale Environment Variables:</span>
+                  <button
+                    onClick={() => handleCopy(generatedEnvContent, 'koyeb_env')}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-mono normal-case"
+                  >
+                    {copiedKey === 'koyeb_env' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    Copy All Variables
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-950 text-slate-400 font-mono text-[11px] border-b border-slate-800">
+                      <tr>
+                        <th className="p-2.5">Variable Name</th>
+                        <th className="p-2.5">Example Value</th>
+                        <th className="p-2.5">Kahan se milega / Kya kaam karta hai</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80 font-mono text-[11px] text-slate-300">
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">API_ID</td>
+                        <td className="p-2.5 text-slate-300">12345678</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">my.telegram.org se milega</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">API_HASH</td>
+                        <td className="p-2.5 text-slate-300">abcdef1234567890...</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">my.telegram.org se milega</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">MAIN_BOT_TOKEN</td>
+                        <td className="p-2.5 text-slate-300">7123456789:AAHq_...</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">@BotFather se Telegram bot ka token</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">BOT_TOKENS</td>
+                        <td className="p-2.5 text-slate-300">7123456789:AAHq_...</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Same token ya multi-worker tokens (comma separated)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">STORAGE_CHANNEL</td>
+                        <td className="p-2.5 text-slate-300">-1002345678901</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Aapke Telegram Channel ka Chat ID (bot ko admin banayein)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">DATABASE_BACKUP_MSG_ID</td>
+                        <td className="p-2.5 text-slate-300">2</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Storage channel me pehle kisi message ka ID (backup ke liye)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">ADMIN_PASSWORD</td>
+                        <td className="p-2.5 text-slate-300">admin</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Website panel ka password</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">WEBSITE_URL ⭐</td>
+                        <td className="p-2.5 text-cyan-300">https://your-app.koyeb.app</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs"><strong>Sabse Zaruri:</strong> Koyeb jo domain deta hai use yahan dalein taaki bot direct stream/download link bana sake!</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-emerald-400">TELEGRAM_ADMIN_IDS</td>
+                        <td className="p-2.5 text-slate-300">987654321</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Aapka Telegram User ID (@userinfobot se check karein)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 text-slate-400">DATABASE_BACKUP_TIME</td>
+                        <td className="p-2.5 text-slate-400">60</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Backup interval in seconds</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 text-slate-400">SLEEP_THRESHOLD</td>
+                        <td className="p-2.5 text-slate-400">60</td>
+                        <td className="p-2.5 font-sans text-slate-400 text-xs">Telegram FloodWait auto retry timeout</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs text-slate-300 pt-3 border-t border-slate-800">
                 <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1">
-                  <div className="font-bold text-white text-sm">Step 4: Bot Mode Activation</div>
-                  <p>
-                    Apne Telegram Bot ko <code className="text-emerald-400">/start</code> bhejein. <code className="text-emerald-400">/set_folder</code> command se folder select karein aur koi bhi video/file forward karein. Bot turant direct download aur stream link generate karke de dega!
-                  </p>
+                  <div className="font-bold text-white text-sm">Step-by-Step Koyeb Deployment:</div>
+                  <ol className="list-decimal list-inside space-y-1.5 text-slate-300 text-xs pt-1">
+                    <li><code className="text-emerald-400">Telegram-Drive-Fixed.zip</code> ko unzip karke apne GitHub account par push karein.</li>
+                    <li>Koyeb dashboard me jayein aur <strong>Create Service</strong> → <strong>GitHub</strong> select karein.</li>
+                    <li>Builder me <strong>Buildpack</strong> ya <strong>Dockerfile</strong> select karein.</li>
+                    <li>Port me <strong>8000</strong> dalein.</li>
+                    <li>Run Command me <strong>python3 start_main.py</strong> dalein.</li>
+                    <li>Upar diye gaye saare Environment Variables ko <strong>Environment variables</strong> section me add karein.</li>
+                    <li><strong>Deploy</strong> par click karein. 1-2 minute me aapki website live ho jayegi!</li>
+                  </ol>
                 </div>
               </div>
             </div>

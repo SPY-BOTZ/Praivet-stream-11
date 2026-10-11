@@ -16,6 +16,7 @@ You can use this bot to upload files directly to your TG Drive website and insta
 🗄 **Commands:**
 /set_folder - Set the folder where new files will be uploaded
 /current_folder - View the current active upload folder
+/stats (or /views) - View total member views, stream counts & file analytics
 /help - Show this help message
 
 📤 **How to Upload Files:**
@@ -161,6 +162,52 @@ async def current_folder_handler(client: Client, message: Message):
         f"📁 **Current Upload Folder:** `{BOT_MODE.current_folder_name}`\n"
         f"📍 **Internal Path:** `{BOT_MODE.current_folder}`"
     )
+
+@main_bot.on_message(
+    filters.command(["stats", "views"])
+    & filters.private
+    & filters.user(config.TELEGRAM_ADMIN_IDS),
+)
+async def stats_handler(client: Client, message: Message):
+    global DRIVE_DATA
+    if not DRIVE_DATA:
+        await message.reply_text("⚠️ Drive data not loaded yet.")
+        return
+
+    analytics = DRIVE_DATA.get_analytics_summary()
+    total_files = analytics.get("total_files", 0)
+    total_views = analytics.get("total_views", 0)
+    total_downloads = analytics.get("total_downloads", 0)
+    top_files = analytics.get("top_files", [])
+    recent_activity = analytics.get("recent_activity", [])
+
+    text = (
+        "📊 **TG Drive File Views & Analytics**\n\n"
+        f"📁 **Total Files:** `{total_files}`\n"
+        f"👁 **Total Views / Streams:** `{total_views}`\n"
+        f"📥 **Total Downloads:** `{total_downloads}`\n\n"
+        "🔥 **Top Viewed Files:**\n"
+    )
+
+    if top_files:
+        for idx, f in enumerate(top_files[:7], start=1):
+            text += f"{idx}. **{f['name']}**\n   👁 `{f['views']} views` | 📥 `{f['downloads']} downloads`\n"
+    else:
+        text += "No files viewed yet.\n"
+
+    if recent_activity:
+        text += "\n🕒 **Recent Visitor Activity:**\n"
+        for act in recent_activity[:4]:
+            t_type = "🎬 Stream" if act.get("type") == "stream" else "📥 Download"
+            text += f"• `{act.get('time', '')}` - {t_type} on `{act.get('file_name', '')[:25]}` (IP: `{act.get('ip', 'N/A')}`)\n"
+
+    base_url = get_base_url()
+    buttons = []
+    if base_url:
+        buttons.append([InlineKeyboardButton("🌐 Open Web Drive Analytics", url=f"{base_url}/")])
+
+    reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
+    await message.reply_text(text, reply_markup=reply_markup)
 
 # File handler for all Telegram media types
 @main_bot.on_message(
