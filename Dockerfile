@@ -21,5 +21,5 @@ RUN if [ -f "Telegram-Drive-Fixed/requirements.txt" ]; then \
 # Expose Koyeb port
 EXPOSE 8000
 
-# Start TG Drive Bot
-CMD ["sh", "-c", "if [ -d 'Telegram-Drive-Fixed' ]; then cd Telegram-Drive-Fixed && python3 start_main.py; else python3 start_main.py; fi"]
+# Start TG Drive Bot bound to 0.0.0.0 (Koyeb health check passes immediately)
+CMD ["sh", "-c", "if [ -d 'Telegram-Drive-Fixed' ]; then cd Telegram-Drive-Fixed && uvicorn main:app --host 0.0.0.0 --port 8000; else uvicorn main:app --host 0.0.0.0 --port 8000; fi"]
