@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TG Drive - Fast Media Player</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #0d1117;
+            color: #e6edf3;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 16px;
+        }
+        .header {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #58a6ff;
+        }
+        .back-link {
+            color: #8b949e;
+            text-decoration: none;
+            font-size: 0.875rem;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            color: #ffffff;
+            border-color: #8b949e;
+        }
+        .player-wrapper {
+            width: 100%;
+            max-width: 900px;
+            background: #161b22;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #30363d;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+        }
+        .video-container {
+            width: 100%;
+            position: relative;
+            background: #000;
+        }
+        .video-js {
+            width: 100% !important;
+            height: auto !important;
+            aspect-ratio: 16 / 9;
+            max-height: 75vh;
+        }
+        .native-video {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            max-height: 75vh;
+            display: block;
+            outline: none;
+        }
+        .controls-panel {
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .file-info-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            color: #8b949e;
+            word-break: break-all;
+        }
+        .file-name {
+            color: #f0f6fc;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        .btn-primary {
+            background-color: #238636;
+            color: #ffffff;
+        }
+        .btn-primary:hover {
+            background-color: #2ea043;
+        }
+        .btn-secondary {
+            background-color: #21262d;
+            color: #c9d1d9;
+            border-color: #30363d;
+        }
+        .btn-secondary:hover {
+            background-color: #30363d;
+            color: #ffffff;
+        }
+        .btn-vlc {
+            background-color: #e65100;
+            color: #ffffff;
+        }
+        .btn-vlc:hover {
+            background-color: #f57c00;
+        }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            background: #238636;
+            color: #ffffff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            z-index: 100;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="title">
+            <span>🎬</span>
+            <span>TG Drive Media Player</span>
+        </div>
+        <a href="/" class="back-link">← Back to Drive</a>
+    </div>
+
+    <div class="player-wrapper">
+        <div class="video-container" id="player-mount">
+            <!-- Native video player loaded with fallback and Video.js support -->
+            <video id="native-player" class="native-video" controls preload="auto" playsinline>
+                <source id="video-source" src="" type="video/mp4">
+                Your browser does not support HTML5 video streaming.
+            </video>
+        </div>
+
+        <div class="controls-panel">
+            <div class="file-info-bar">
+                <span id="file-title" class="file-name">Loading file stream...</span>
+            </div>
+
+            <div class="buttons-grid">
+                <a id="btn-download" href="#" class="action-button btn-primary" download>
+                    📥 Direct Download
+                </a>
+                <button type="button" class="action-button btn-secondary" onclick="copyStreamUrl()">
+                    📋 Copy Stream Link
+                </button>
+                <button type="button" class="action-button btn-secondary" onclick="copyDownloadUrl()">
+                    🔗 Copy Download Link
+                </button>
+                <a id="btn-vlc" href="#" class="action-button btn-vlc">
+                    🚀 Open in VLC
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Link copied to clipboard!</div>
+
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script>
+        // Resolve Target Stream & Download URLs
+        function resolveStreamUrls() {
+            const currentUrl = new URL(window.location.href);
+            const searchParams = currentUrl.searchParams;
+            
+            let rawUrl = searchParams.get('url');
+            let filePath = searchParams.get('path');
+
+            // Handle unencoded query string cases (e.g. ?url=http://site/file?path=/xyz)
+            if (rawUrl && searchParams.get('path') && !rawUrl.includes('path=')) {
+                rawUrl = rawUrl + '?path=' + encodeURIComponent(searchParams.get('path'));
+            }
+
+            if (!rawUrl && filePath) {
+                rawUrl = window.location.origin + '/file?path=' + encodeURIComponent(filePath);
+            }
+
+            if (!rawUrl) {
+                // Check if hash has path
+                const hash = window.location.hash.replace('#', '');
+                if (hash) {
+                    rawUrl = window.location.origin + '/file?path=' + encodeURIComponent(hash);
+                }
+            }
+
+            return rawUrl || '';
+        }
+
+        const streamUrl = resolveStreamUrls();
+        let downloadUrl = streamUrl;
+
+        // Force download URL with attachment flag
+        if (downloadUrl) {
+            const dlUrlObj = new URL(downloadUrl, window.location.origin);
+            dlUrlObj.searchParams.set('download', '1');
+            downloadUrl = dlUrlObj.toString();
+        }
+
+        // Initialize Player
+        if (streamUrl) {
+            const nativeVideo = document.getElementById('native-player');
+            const videoSrc = document.getElementById('video-source');
+            videoSrc.src = streamUrl;
+            nativeVideo.src = streamUrl;
+
+            // Guess MIME type
+            const lowerUrl = streamUrl.toLowerCase();
+            if (lowerUrl.includes('.webm')) {
+                videoSrc.type = 'video/webm';
+            } else if (lowerUrl.includes('.mp3') || lowerUrl.includes('.m4a') || lowerUrl.includes('.ogg')) {
+                videoSrc.type = 'audio/mp4';
+            } else {
+                videoSrc.type = 'video/mp4';
+            }
+
+            // Extract filename from URL
+            try {
+                const u = new URL(streamUrl, window.location.origin);
+                const pathParam = u.searchParams.get('path') || '';
+                const parts = pathParam.split('/');
+                const guessedName = parts[parts.length - 1] || 'Media Stream';
+                document.getElementById('file-title').innerText = decodeURIComponent(guessedName);
+                document.title = decodeURIComponent(guessedName) + " - TG Drive Player";
+            } catch(e) {}
+
+            // Setup buttons
+            document.getElementById('btn-download').href = downloadUrl;
+            document.getElementById('btn-vlc').href = 'vlc://' + streamUrl;
+
+            // Load media
+            nativeVideo.load();
+        } else {
+            document.getElementById('file-title').innerText = 'No media URL provided. Pass ?path=/folder/file or ?url=...';
+        }
+
+        // Toast Notification
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // Clipboard Helper
+        function copyText(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('Copied to clipboard!');
+                }).catch(() => {
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            try {
+                document.execCommand('copy');
+                showToast('Copied to clipboard!');
+            } catch (err) {
+                showToast('Failed to copy');
+            }
+            document.body.removeChild(el);
+        }
+
+        function copyStreamUrl() {
+            copyText(window.location.href);
+        }
+
+        function copyDownloadUrl() {
+            copyText(downloadUrl || window.location.href);
+        }
+    </script>
+</body>
+</html>

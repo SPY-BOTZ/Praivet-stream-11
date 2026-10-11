@@ -1,0 +1,6 @@
+{
+  "name": "TG Drive Bot Fix & Stream Suite",
+  "description": "Fixed Telegram Drive Bot with flawless video streaming, high-speed chunked downloads, and direct file link generation for Telegram Bot mode.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
