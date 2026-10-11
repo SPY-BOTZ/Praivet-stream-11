@@ -343,7 +343,7 @@ SLEEP_THRESHOLD=60
                   <strong>Problem:</strong> Video.js initialize hone ke baad <code className="text-rose-200">&lt;source&gt;</code> me src set hota tha, jisse player blank/stuck reh jata tha.
                 </div>
                 <div className="text-xs text-emerald-300/90 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
-                  <strong>Fix Applied:</strong> Player loader ko rewrite kiya gaya jo direct stream load karta hai, VLC player shortcut deta hai aur mobile par smoothly chalta hai.
+                  <strong>Fix Applied:</strong> Player loader ko rewrite kiya gaya jo direct stream load karta hai, Telegram Connect button deta hai aur mobile par smoothly chalta hai.
                 </div>
               </div>
 

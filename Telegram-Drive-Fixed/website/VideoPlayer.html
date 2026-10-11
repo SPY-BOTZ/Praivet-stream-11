@@ -136,12 +136,13 @@
             background-color: #30363d;
             color: #ffffff;
         }
-        .btn-vlc {
-            background-color: #e65100;
+        .btn-telegram {
+            background-color: #229ED9;
             color: #ffffff;
         }
-        .btn-vlc:hover {
-            background-color: #f57c00;
+        .btn-telegram:hover {
+            background-color: #1a8cc2;
+            color: #ffffff;
         }
         .toast {
             position: fixed;
@@ -203,8 +204,8 @@
                 <button type="button" class="action-button btn-secondary" onclick="copyDownloadUrl()">
                     🔗 Copy Download Link
                 </button>
-                <a id="btn-vlc" href="#" class="action-button btn-vlc">
-                    🚀 Open in VLC
+                <a id="btn-tg-connect" href="https://t.me" target="_blank" rel="noopener noreferrer" class="action-button btn-telegram">
+                    ✈️ Telegram Connect
                 </a>
             </div>
         </div>
@@ -281,7 +282,17 @@
 
             // Setup buttons
             document.getElementById('btn-download').href = downloadUrl;
-            document.getElementById('btn-vlc').href = 'vlc://' + streamUrl;
+            
+            // Setup Telegram Connect link
+            fetch('/api/telegramInfo')
+                .then(res => res.json())
+                .then(data => {
+                    const tgBtn = document.getElementById('btn-tg-connect');
+                    if (tgBtn && data && data.bot_url) {
+                        tgBtn.href = data.bot_url;
+                    }
+                })
+                .catch(() => {});
 
             // Fetch live view count for this file
             try {

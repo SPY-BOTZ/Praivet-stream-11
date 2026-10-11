@@ -146,6 +146,22 @@ async def get_file_stats(request: Request):
         return JSONResponse({"status": "error", "message": str(e)}, status_code=404)
 
 
+@app.get("/api/telegramInfo")
+async def get_telegram_info():
+    username = None
+    try:
+        from utils.bot_mode import main_bot
+        if main_bot and getattr(main_bot, "me", None) and getattr(main_bot.me, "username", None):
+            username = main_bot.me.username
+    except Exception:
+        pass
+    return JSONResponse({
+        "status": "ok",
+        "username": username,
+        "bot_url": f"https://t.me/{username}" if username else "https://t.me",
+    })
+
+
 # Api Routes
 
 
