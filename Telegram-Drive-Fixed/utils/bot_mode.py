@@ -6,10 +6,51 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 import config
 from utils.logger import Logger
 from utils.streamer.file_properties import get_name, get_media_from_message
-from utils.admin_manager import admin_manager
-from utils.imdb_helper import get_imdb_info, format_imdb_caption, clean_movie_title
 
 logger = Logger(__name__)
+
+# Resilient imports so bot never crashes on startup if files are added sequentially on GitHub
+try:
+    from utils.admin_manager import admin_manager
+except ImportError:
+    logger.warning("utils.admin_manager not found. Using in-memory fallback admin manager.")
+    class _FallbackAdminManager:
+        def is_admin(self, user_id: int) -> bool:
+            if not getattr(config, "TELEGRAM_ADMIN_IDS", None):
+                return True
+            return user_id in config.TELEGRAM_ADMIN_IDS
+        def add_admin(self, user_id: int, added_by: int = 0):
+            if not hasattr(config, "TELEGRAM_ADMIN_IDS"):
+                config.TELEGRAM_ADMIN_IDS = []
+            if user_id not in config.TELEGRAM_ADMIN_IDS:
+                config.TELEGRAM_ADMIN_IDS.append(user_id)
+            return True, "Added as admin (in-memory mode)"
+        def remove_admin(self, user_id: int, removed_by: int = 0):
+            if user_id in getattr(config, "TELEGRAM_ADMIN_IDS", []):
+                config.TELEGRAM_ADMIN_IDS.remove(user_id)
+                return True, "Removed from admins (in-memory mode)"
+            return False, "User is not an admin"
+        def get_all_admins(self):
+            return list(getattr(config, "TELEGRAM_ADMIN_IDS", []))
+    admin_manager = _FallbackAdminManager()
+
+try:
+    from utils.imdb_helper import get_imdb_info, format_imdb_caption, clean_movie_title
+except ImportError:
+    logger.warning("utils.imdb_helper not found. Using fallback metadata handler.")
+    def clean_movie_title(raw_name: str):
+        name = raw_name
+        for ext in ('.mp4', '.mkv', '.webm', '.mov', '.avi'):
+            if name.lower().endswith(ext):
+                name = name[:-len(ext)]
+        name = name.replace('.', ' ').replace('_', ' ').replace('-', ' ').strip()
+        return name, ""
+
+    async def get_imdb_info(query: str, year: str = ""):
+        return None
+
+    def format_imdb_caption(info, dl_url, stream_url=None, folder_url=None, file_size="", file_name=""):
+        return f"📄 `{file_name}`\n💾 Size: `{file_size}`\n⚡ Download: {dl_url}"
 
 START_CMD = """🚀 **Welcome to TG Drive's Bot Mode**
 

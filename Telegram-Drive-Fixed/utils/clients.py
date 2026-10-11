@@ -83,15 +83,12 @@ async def initialize_clients():
         )
     )
     if len(multi_clients) == 0:
-        logger.error("No Clients Were Initialized")
-
-        # Forcefully terminates the program immediately
-        os.kill(os.getpid(), signal.SIGKILL)
+        logger.error("No Clients Were Initialized! Please check BOT_TOKENS, API_ID, and API_HASH.")
+    else:
+        logger.info(f"Clients Initialized Successfully ({len(multi_clients)} bot worker(s))")
 
     if len(premium_clients) == 0:
         logger.info("No Premium Clients Were Initialized")
-
-    logger.info("Clients Initialized")
 
     # Load the drive data
     await loadDriveData()
@@ -103,10 +100,17 @@ async def initialize_clients():
 def get_client(premium_required=False) -> Client:
     global multi_clients, work_loads, premium_clients, premium_work_loads
 
-    if premium_required:
+    if premium_required and len(premium_clients) > 0:
         index = min(premium_work_loads, key=premium_work_loads.get)
         premium_work_loads[index] += 1
         return premium_clients[index]
+
+    if len(multi_clients) == 0:
+        if len(premium_clients) > 0:
+            index = min(premium_work_loads, key=premium_work_loads.get)
+            premium_work_loads[index] += 1
+            return premium_clients[index]
+        raise RuntimeError("Telegram Bot clients are still initializing. Please wait a few seconds and refresh.")
 
     index = min(work_loads, key=work_loads.get)
     work_loads[index] += 1

@@ -11,5 +11,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Bind to 0.0.0.0 so Koyeb health check passes
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run via start_main.py to dynamically bind to PORT (default 8000) and pass Koyeb health checks
+CMD ["python3", "start_main.py"]

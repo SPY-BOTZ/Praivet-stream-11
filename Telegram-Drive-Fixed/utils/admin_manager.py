@@ -8,7 +8,7 @@ from utils.logger import Logger
 
 logger = Logger(__name__)
 
-ADMINS_CACHE_FILE = Path("./cache/admins.json")
+ADMINS_CACHE_FILE = Path("./admins.json")
 
 class AdminManager:
     def __init__(self):

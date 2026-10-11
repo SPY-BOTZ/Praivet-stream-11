@@ -24,8 +24,8 @@ async def lifespan(app: FastAPI):
     # Reset the cache directory, delete cache files
     reset_cache_dir()
 
-    # Initialize the clients
-    await initialize_clients()
+    # Initialize the clients in background so uvicorn binds port 8000 immediately for Koyeb health checks
+    asyncio.create_task(initialize_clients())
 
     # Start the website auto ping task
     asyncio.create_task(auto_ping_website())
