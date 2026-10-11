@@ -292,6 +292,10 @@
                         .then(res => res.json())
                         .then(data => {
                             if (data && data.file) {
+                                if (data.file.name) {
+                                    document.getElementById('file-title').innerText = data.file.name;
+                                    document.title = data.file.name + " - TG Drive Player";
+                                }
                                 const views = data.file.views || 1;
                                 const dls = data.file.downloads || 0;
                                 document.getElementById('view-count').innerText = `${views} views • ${dls} dl`;

@@ -59,12 +59,25 @@ class ByteStreamer:
         Safely thread-locked to avoid concurrent session creation collisions.
         """
         async with _get_session_lock(client):
-            media_session = client.media_sessions.get(file_id.dc_id, None)
-            
+            # 1. Primary: Use client's built-in get_session (handles Kurigram and modern Pyrogram)
+            if hasattr(client, "get_session"):
+                try:
+                    session = await client.get_session(file_id.dc_id, is_media=True)
+                    if session is not None:
+                        return session
+                except Exception as gs_err:
+                    logger.debug(f"client.get_session failed: {gs_err}, trying dynamic session fallback...")
+
+            # 2. Check if already present and connected in client.media_sessions
+            media_session = getattr(client, "media_sessions", {}).get(file_id.dc_id, None)
             if media_session is not None and getattr(media_session, "is_connected", True):
                 return media_session
 
-            # Create new media session
+            # 3. Dynamic fallback across different Pyrogram versions and signatures
+            import inspect
+            auth_params = inspect.signature(Auth.__init__).parameters
+            sess_params = inspect.signature(Session.__init__).parameters
+
             try:
                 storage_dc_id = await client.storage.dc_id()
             except TypeError:
@@ -75,18 +88,36 @@ class ByteStreamer:
             except TypeError:
                 is_test_mode = client.storage.test_mode()
 
+            server_address = getattr(client, "ipv6", False) and "2001:b28:f23d:f001::a" or f"149.154.167.{40 + file_id.dc_id}"
+
             if file_id.dc_id != storage_dc_id:
-                auth_obj = Auth(client, file_id.dc_id, is_test_mode)
-                auth_key = await auth_obj.create()
-                media_session = Session(
-                    client,
-                    file_id.dc_id,
-                    auth_key,
-                    is_test_mode,
-                    is_media=True,
-                )
-                await media_session.start()
+                if "port" in auth_params:
+                    auth_obj = Auth(client, file_id.dc_id, server_address, 443, is_test_mode)
+                else:
+                    auth_obj = Auth(client, file_id.dc_id, is_test_mode)
                 
+                auth_key = await auth_obj.create()
+
+                if "server_address" in sess_params:
+                    media_session = Session(
+                        client,
+                        file_id.dc_id,
+                        server_address,
+                        443,
+                        auth_key,
+                        is_test_mode,
+                        is_media=True,
+                    )
+                else:
+                    media_session = Session(
+                        client,
+                        file_id.dc_id,
+                        auth_key,
+                        is_test_mode,
+                        is_media=True,
+                    )
+                await media_session.start()
+
                 # Export and import auth to the target data center
                 for attempt in range(6):
                     try:
@@ -111,14 +142,25 @@ class ByteStreamer:
                     auth_key = await client.storage.auth_key()
                 except TypeError:
                     auth_key = client.storage.auth_key()
-                
-                media_session = Session(
-                    client,
-                    file_id.dc_id,
-                    auth_key,
-                    is_test_mode,
-                    is_media=True,
-                )
+
+                if "server_address" in sess_params:
+                    media_session = Session(
+                        client,
+                        file_id.dc_id,
+                        server_address,
+                        443,
+                        auth_key,
+                        is_test_mode,
+                        is_media=True,
+                    )
+                else:
+                    media_session = Session(
+                        client,
+                        file_id.dc_id,
+                        auth_key,
+                        is_test_mode,
+                        is_media=True,
+                    )
                 await media_session.start()
 
             client.media_sessions[file_id.dc_id] = media_session
@@ -192,7 +234,7 @@ class ByteStreamer:
                             limit=chunk_size,
                         )
                     )
-                if isinstance(result, raw.types.upload.File):
+                if hasattr(result, "bytes"):
                     return result.bytes
                 return b""
             except FloodWait as flood:
