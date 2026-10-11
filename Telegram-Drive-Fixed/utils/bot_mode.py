@@ -21,9 +21,9 @@ You can use this bot to upload files directly to your TG Drive website and insta
 
 📤 **How to Upload Files:**
 Send or forward any file, video, audio, photo, or document to this bot.
-The bot will save it to your selected folder and instantly reply with:
+The bot will save it to your TG Drive website and instantly reply with:
 • ⚡ **Direct Download Link**
-• 🎬 **Online Stream Link** (with built-in web player)
+• 🎬 **Online Stream Link** (with web video player)
 • 📂 **Web Drive Location**
 """
 
@@ -55,28 +55,88 @@ def format_bytes(size: int) -> str:
     return f"{size_float:.2f} {units[unit_index]}"
 
 def get_base_url() -> str:
-    if config.WEBSITE_URL and config.WEBSITE_URL.strip():
+    if config.WEBSITE_URL:
         url = config.WEBSITE_URL.strip().rstrip("/")
         if not (url.startswith("http://") or url.startswith("https://")):
             url = f"https://{url}"
         return url
     return ""
 
-@main_bot.on_message(
-    filters.command(["start", "help"])
-    & filters.private
-    & filters.user(config.TELEGRAM_ADMIN_IDS),
-)
-async def start_handler(client: Client, message: Message):
-    await message.reply_text(START_CMD, disable_web_page_preview=True)
+def is_admin(user_id: int) -> bool:
+    # If no TELEGRAM_ADMIN_IDS configured, allow so owner is not locked out
+    if not config.TELEGRAM_ADMIN_IDS:
+        return True
+    return user_id in config.TELEGRAM_ADMIN_IDS
 
-@main_bot.on_message(
-    filters.command("set_folder")
-    & filters.private
-    & filters.user(config.TELEGRAM_ADMIN_IDS),
-)
+async def safe_reply_text(message: Message, text: str, reply_markup=None) -> Message:
+    """Safely replies without crashing on Pyrogram link preview parameter differences"""
+    try:
+        from pyrogram.types import LinkPreviewOptions
+        return await message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception:
+        try:
+            return await message.reply_text(
+                text,
+                reply_markup=reply_markup,
+            )
+        except Exception as e:
+            logger.error(f"Failed to safe_reply_text: {e}")
+            raise
+
+async def safe_edit_text(message: Message, text: str, reply_markup=None) -> Message:
+    """Safely edits message text without crashing on disable_web_page_preview or link_preview_options"""
+    try:
+        from pyrogram.types import LinkPreviewOptions
+        return await message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception:
+        try:
+            return await message.edit_text(
+                text,
+                reply_markup=reply_markup,
+            )
+        except Exception as e:
+            logger.error(f"Failed to safe_edit_text: {e}")
+            raise
+
+@main_bot.on_message(filters.command(["start", "help"]) & filters.private)
+async def start_handler(client: Client, message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+
+    if not is_admin(user_id):
+        unauth_text = (
+            f"👋 **Hello {message.from_user.first_name if message.from_user else 'User'}!**\n\n"
+            f"Your Telegram User ID is: `{user_id}`\n\n"
+            "⚠️ **Access Restricted:**\n"
+            f"To enable file uploads and manage this bot, please add your ID `{user_id}` to the `TELEGRAM_ADMIN_IDS` environment variable in Koyeb/hosting settings."
+        )
+        await safe_reply_text(message, unauth_text)
+        return
+
+    base_url = get_base_url()
+    buttons = []
+    if base_url:
+        buttons.append([InlineKeyboardButton("🌐 Open Web Drive", url=f"{base_url}/")])
+    buttons.append([InlineKeyboardButton("📊 View Analytics", callback_data="btn_stats")])
+
+    reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
+    await safe_reply_text(message, START_CMD, reply_markup=reply_markup)
+
+@main_bot.on_message(filters.command("set_folder") & filters.private)
 async def set_folder_handler(client: Client, message: Message):
     global SET_FOLDER_PATH_CACHE, DRIVE_DATA
+    user_id = message.from_user.id if message.from_user else 0
+    if not is_admin(user_id):
+        await safe_reply_text(message, f"❌ Access denied. Your User ID is `{user_id}`.")
+        return
+
     while True:
         try:
             folder_name = await message.ask(
@@ -85,21 +145,24 @@ async def set_folder_handler(client: Client, message: Message):
                 filters=filters.text,
             )
         except asyncio.TimeoutError:
-            await message.reply_text("⏱ Request timed out. Use /set_folder to try again.")
+            await safe_reply_text(message, "⏱ Request timed out. Use /set_folder to try again.")
             return
 
         if folder_name.text.lower() == "/cancel":
-            await message.reply_text("❌ Action cancelled.")
+            await safe_reply_text(message, "❌ Action cancelled.")
             return
 
         folder_name_clean = folder_name.text.strip()
         search_result = DRIVE_DATA.search_file_folder(folder_name_clean)
         
         # Filter folders from search result
-        folders = {item.id: item for item in search_result.values() if item.type == "folder"}
+        folders = {item.id: item for item in search_result.values() if getattr(item, "type", "") == "folder"}
 
         if len(folders) == 0:
-            await message.reply_text(f"⚠️ No folder found with name: **{folder_name_clean}**\nPlease try another name or send /cancel.")
+            await safe_reply_text(
+                message,
+                f"⚠️ No folder found with name: **{folder_name_clean}**\nPlease try another name or send /cancel."
+            )
         else:
             break
 
@@ -120,16 +183,20 @@ async def set_folder_handler(client: Client, message: Message):
         )
 
     SET_FOLDER_PATH_CACHE[folder_cache_id] = folder_cache
-    await message.reply_text(
+    await safe_reply_text(
+        message,
         "📂 **Select destination folder:**",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
-@main_bot.on_callback_query(
-    filters.user(config.TELEGRAM_ADMIN_IDS) & filters.regex(r"set_folder_")
-)
+@main_bot.on_callback_query(filters.regex(r"set_folder_"))
 async def set_folder_callback(client: Client, callback_query):
     global SET_FOLDER_PATH_CACHE, BOT_MODE
+    user_id = callback_query.from_user.id if callback_query.from_user else 0
+    if not is_admin(user_id):
+        await callback_query.answer("❌ Access denied", show_alert=True)
+        return
+
     try:
         parts = callback_query.data.split("_")[2:]
         folder_cache_id, folder_id = parts[0], parts[1]
@@ -151,27 +218,50 @@ async def set_folder_callback(client: Client, callback_query):
     except Exception as e:
         logger.error(f"Error in set_folder_callback: {e}")
 
-@main_bot.on_message(
-    filters.command("current_folder")
-    & filters.private
-    & filters.user(config.TELEGRAM_ADMIN_IDS),
-)
-async def current_folder_handler(client: Client, message: Message):
-    global BOT_MODE
-    await message.reply_text(
-        f"📁 **Current Upload Folder:** `{BOT_MODE.current_folder_name}`\n"
-        f"📍 **Internal Path:** `{BOT_MODE.current_folder}`"
-    )
-
-@main_bot.on_message(
-    filters.command(["stats", "views"])
-    & filters.private
-    & filters.user(config.TELEGRAM_ADMIN_IDS),
-)
-async def stats_handler(client: Client, message: Message):
+@main_bot.on_callback_query(filters.regex(r"^btn_stats$"))
+async def stats_callback(client: Client, callback_query):
     global DRIVE_DATA
     if not DRIVE_DATA:
-        await message.reply_text("⚠️ Drive data not loaded yet.")
+        await callback_query.answer("Drive data loading...", show_alert=True)
+        return
+    analytics = DRIVE_DATA.get_analytics_summary()
+    total_views = analytics.get("total_views", 0)
+    total_downloads = analytics.get("total_downloads", 0)
+    total_files = analytics.get("total_files", 0)
+    text = (
+        f"📊 **Drive Views & Stats Summary**\n\n"
+        f"📂 Total Files: {total_files}\n"
+        f"👁 Total Views / Streams: {total_views}\n"
+        f"📥 Total Downloads: {total_downloads}"
+    )
+    await callback_query.answer(text, show_alert=True)
+
+@main_bot.on_message(filters.command("current_folder") & filters.private)
+async def current_folder_handler(client: Client, message: Message):
+    global BOT_MODE
+    user_id = message.from_user.id if message.from_user else 0
+    if not is_admin(user_id):
+        await safe_reply_text(message, f"❌ Access denied. Your User ID is `{user_id}`.")
+        return
+
+    folder_name = getattr(BOT_MODE, "current_folder_name", "/ (root directory)")
+    folder_path = getattr(BOT_MODE, "current_folder", "/")
+    await safe_reply_text(
+        message,
+        f"📁 **Current Upload Folder:** `{folder_name}`\n"
+        f"📍 **Internal Path:** `{folder_path}`"
+    )
+
+@main_bot.on_message(filters.command(["stats", "views"]) & filters.private)
+async def stats_handler(client: Client, message: Message):
+    global DRIVE_DATA
+    user_id = message.from_user.id if message.from_user else 0
+    if not is_admin(user_id):
+        await safe_reply_text(message, f"❌ Access denied. Your User ID is `{user_id}`.")
+        return
+
+    if not DRIVE_DATA:
+        await safe_reply_text(message, "⚠️ Drive data not loaded yet.")
         return
 
     analytics = DRIVE_DATA.get_analytics_summary()
@@ -182,21 +272,21 @@ async def stats_handler(client: Client, message: Message):
     recent_activity = analytics.get("recent_activity", [])
 
     text = (
-        "📊 **TG Drive File Views & Analytics**\n\n"
-        f"📁 **Total Files:** `{total_files}`\n"
+        f"📊 **TG Drive Analytics & Member View Counts**\n\n"
+        f"📁 **Total Files in Drive:** `{total_files}`\n"
         f"👁 **Total Views / Streams:** `{total_views}`\n"
         f"📥 **Total Downloads:** `{total_downloads}`\n\n"
-        "🔥 **Top Viewed Files:**\n"
     )
 
     if top_files:
-        for idx, f in enumerate(top_files[:7], start=1):
+        text += "🏆 **Most Viewed & Downloaded Files:**\n"
+        for idx, f in enumerate(top_files[:7], 1):
             text += f"{idx}. **{f['name']}**\n   👁 `{f['views']} views` | 📥 `{f['downloads']} downloads`\n"
     else:
         text += "No files viewed yet.\n"
 
     if recent_activity:
-        text += "\n🕒 **Recent Visitor Activity:**\n"
+        text += "\n🕒 **Recent Member Access Activity:**\n"
         for act in recent_activity[:4]:
             t_type = "🎬 Stream" if act.get("type") == "stream" else "📥 Download"
             text += f"• `{act.get('time', '')}` - {t_type} on `{act.get('file_name', '')[:25]}` (IP: `{act.get('ip', 'N/A')}`)\n"
@@ -207,12 +297,11 @@ async def stats_handler(client: Client, message: Message):
         buttons.append([InlineKeyboardButton("🌐 Open Web Drive Analytics", url=f"{base_url}/")])
 
     reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
-    await message.reply_text(text, reply_markup=reply_markup)
+    await safe_reply_text(message, text, reply_markup=reply_markup)
 
 # File handler for all Telegram media types
 @main_bot.on_message(
     filters.private
-    & filters.user(config.TELEGRAM_ADMIN_IDS)
     & (
         filters.document
         | filters.video
@@ -230,7 +319,15 @@ async def file_handler(client: Client, message: Message):
     and returns Direct Download, Video/Audio Stream, and Drive Web links directly to the user!
     """
     global BOT_MODE, DRIVE_DATA
-    status_msg = await message.reply_text("⏳ Processing and indexing your file...")
+    user_id = message.from_user.id if message.from_user else 0
+    if not is_admin(user_id):
+        await safe_reply_text(
+            message,
+            f"❌ **Upload Access Denied**\n\nYour Telegram User ID is `{user_id}`.\nPlease add this ID to `TELEGRAM_ADMIN_IDS` in your environment variables to allow file uploads."
+        )
+        return
+
+    status_msg = await safe_reply_text(message, "⏳ Processing and indexing your file...")
 
     try:
         # Copy file to storage channel
@@ -238,7 +335,7 @@ async def file_handler(client: Client, message: Message):
         media = get_media_from_message(copied_message)
         
         if not media:
-            await status_msg.edit_text("❌ Could not read media from message.")
+            await safe_edit_text(status_msg, "❌ Could not read media from message.")
             return
 
         # Safe filename & size extraction
@@ -246,16 +343,19 @@ async def file_handler(client: Client, message: Message):
         file_size = getattr(media, "file_size", 0) or 0
         formatted_size = format_bytes(file_size)
 
-        # Store in TG Drive data structure
+        current_folder = getattr(BOT_MODE, "current_folder", "/") if BOT_MODE else "/"
+        current_folder_name = getattr(BOT_MODE, "current_folder_name", "/ (root directory)") if BOT_MODE else "/ (root directory)"
+
+        # Store in TG Drive data structure and save to disk
         new_file_item = DRIVE_DATA.new_file(
-            BOT_MODE.current_folder,
+            current_folder,
             file_name,
             copied_message.id,
             file_size,
         )
 
         file_id = new_file_item.id if new_file_item else getattr(new_file_item, "id", None)
-        raw_folder = BOT_MODE.current_folder.strip("/")
+        raw_folder = current_folder.strip("/")
         file_path = "/" + (raw_folder + "/" + file_id if raw_folder else file_id)
 
         base_url = get_base_url()
@@ -266,7 +366,7 @@ async def file_handler(client: Client, message: Message):
         if base_url:
             download_url = f"{base_url}/file?path={file_path}"
             stream_url = f"{base_url}/stream?path={file_path}"
-            folder_url = f"{base_url}/?path={BOT_MODE.current_folder}"
+            folder_url = f"{base_url}/?path={current_folder}"
 
             keyboard_buttons = [
                 [InlineKeyboardButton("📥 Direct Download", url=download_url)]
@@ -279,17 +379,17 @@ async def file_handler(client: Client, message: Message):
                 f"✅ **File Uploaded Successfully!**\n\n"
                 f"📄 **File Name:** `{file_name}`\n"
                 f"💾 **File Size:** `{formatted_size}`\n"
-                f"📁 **Folder:** `{BOT_MODE.current_folder_name}`\n\n"
+                f"📁 **Folder:** `{current_folder_name}`\n\n"
                 f"⚡ **Direct Download Link:**\n`{download_url}`\n\n"
             )
             if is_streamable:
                 reply_text += f"🎬 **Online Stream Link:**\n`{stream_url}`\n\n"
             reply_text += f"🌐 **Web Drive Folder:**\n`{folder_url}`"
 
-            await status_msg.edit_text(
+            await safe_edit_text(
+                status_msg,
                 reply_text,
                 reply_markup=InlineKeyboardMarkup(keyboard_buttons),
-                disable_web_page_preview=True,
             )
         else:
             # Fallback if WEBSITE_URL is not set in .env
@@ -297,15 +397,15 @@ async def file_handler(client: Client, message: Message):
                 f"✅ **File Uploaded Successfully!**\n\n"
                 f"📄 **File Name:** `{file_name}`\n"
                 f"💾 **File Size:** `{formatted_size}`\n"
-                f"📁 **Folder:** `{BOT_MODE.current_folder_name}`\n"
+                f"📁 **Folder:** `{current_folder_name}`\n"
                 f"📍 **File Path:** `{file_path}`\n\n"
-                f"⚠️ *Note: Set `WEBSITE_URL` in your `.env` file to generate clickable website links directly here!*"
+                f"⚠️ *Note: Set `WEBSITE_URL` in your Koyeb environment variables (e.g. `https://your-app.koyeb.app`) to generate clickable direct download and streaming buttons!*"
             )
-            await status_msg.edit_text(reply_text)
+            await safe_edit_text(status_msg, reply_text)
 
     except Exception as e:
         logger.error(f"Error handling file upload in bot mode: {e}")
-        await status_msg.edit_text(f"❌ **Upload Failed:** `{str(e)}`")
+        await safe_edit_text(status_msg, f"❌ **Upload Failed:** `{str(e)}`")
 
 async def start_bot_mode(d, b):
     global DRIVE_DATA, BOT_MODE

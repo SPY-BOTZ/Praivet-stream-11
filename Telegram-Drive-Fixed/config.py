@@ -56,5 +56,8 @@ if MAIN_BOT_TOKEN.strip() == "":
     MAIN_BOT_TOKEN = None
 
 # List of Telegram User IDs who have admin access to the bot mode
-TELEGRAM_ADMIN_IDS = os.getenv("TELEGRAM_ADMIN_IDS", "").strip(", ").split(",")
-TELEGRAM_ADMIN_IDS = [int(id) for id in TELEGRAM_ADMIN_IDS if id.strip() != ""]
+_raw_admin_ids = os.getenv("TELEGRAM_ADMIN_IDS", "")
+TELEGRAM_ADMIN_IDS = []
+for _aid in _raw_admin_ids.replace(" ", "").split(","):
+    if _aid.isdigit():
+        TELEGRAM_ADMIN_IDS.append(int(_aid))
