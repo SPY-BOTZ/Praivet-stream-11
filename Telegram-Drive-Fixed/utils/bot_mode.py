@@ -6,24 +6,35 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 import config
 from utils.logger import Logger
 from utils.streamer.file_properties import get_name, get_media_from_message
+from utils.admin_manager import admin_manager
+from utils.imdb_helper import get_imdb_info, format_imdb_caption, clean_movie_title
 
 logger = Logger(__name__)
 
 START_CMD = """🚀 **Welcome to TG Drive's Bot Mode**
 
-You can use this bot to upload files directly to your TG Drive website and instantly get **Direct Download** and **Online Streaming** links!
+You can use this bot to upload files directly to your TG Drive website and instantly get **Direct Download**, **Online Streaming**, and automatic **IMDb Movie Information**!
 
-🗄 **Commands:**
-/set_folder - Set the folder where new files will be uploaded
-/current_folder - View the current active upload folder
-/stats (or /views) - View total member views, stream counts & file analytics
-/help - Show this help message
+🗄 **Drive & Folder Commands:**
+• /set_folder - Set the folder where new files will be uploaded
+• /current_folder - View the current active upload folder
+• /stats (or /views) - View total member views, stream counts & analytics
+
+🍿 **IMDb & Movie Features:**
+• Automatic IMDb poster, rating ⭐ & plot whenever you send any movie/series file!
+• /imdb `<movie name>` - Search IMDb details manually anytime
+
+👥 **Admin Management Commands:**
+• /addadmin `<user_id>` - Add a new admin (or reply to a user with /addadmin)
+• /deladmin `<user_id>` - Remove an admin (or reply to a user with /deladmin)
+• /admins - List all current bot admins & primary owners
 
 📤 **How to Upload Files:**
 Send or forward any file, video, audio, photo, or document to this bot.
 The bot will save it to your TG Drive website and instantly reply with:
 • ⚡ **Direct Download Link**
 • 🎬 **Online Stream Link** (with web video player)
+• 🍿 **IMDb Poster & Details** (for movies and series)
 • 📂 **Web Drive Location**
 """
 
@@ -63,10 +74,7 @@ def get_base_url() -> str:
     return ""
 
 def is_admin(user_id: int) -> bool:
-    # If no TELEGRAM_ADMIN_IDS configured, allow so owner is not locked out
-    if not config.TELEGRAM_ADMIN_IDS:
-        return True
-    return user_id in config.TELEGRAM_ADMIN_IDS
+    return admin_manager.is_admin(user_id)
 
 async def safe_reply_text(message: Message, text: str, reply_markup=None) -> Message:
     """Safely replies without crashing on Pyrogram link preview parameter differences"""
@@ -299,6 +307,144 @@ async def stats_handler(client: Client, message: Message):
     reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
     await safe_reply_text(message, text, reply_markup=reply_markup)
 
+# Admin Management Commands
+@main_bot.on_message(filters.command(["addadmin", "add_admin"]) & filters.private)
+async def add_admin_handler(client: Client, message: Message):
+    caller_id = message.from_user.id if message.from_user else 0
+    if not is_admin(caller_id):
+        await safe_reply_text(message, "❌ Access denied. Only admins can add other admins.")
+        return
+
+    target_id = None
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_id = message.reply_to_message.from_user.id
+    else:
+        parts = message.text.split()
+        if len(parts) > 1 and parts[1].strip().lstrip("-").isdigit():
+            target_id = int(parts[1].strip())
+
+    if not target_id:
+        await safe_reply_text(
+            message,
+            "ℹ️ **How to Add an Admin:**\n\n"
+            "• Option 1: Send `/addadmin <Telegram_User_ID>`\n"
+            "  *Example:* `/addadmin 1234567890`\n\n"
+            "• Option 2: Forward/Reply to any user's message with `/addadmin`"
+        )
+        return
+
+    success, msg = admin_manager.add_admin(target_id, added_by=caller_id)
+    await safe_reply_text(message, msg)
+
+@main_bot.on_message(filters.command(["deladmin", "removeadmin", "remove_admin", "del_admin"]) & filters.private)
+async def remove_admin_handler(client: Client, message: Message):
+    caller_id = message.from_user.id if message.from_user else 0
+    if not is_admin(caller_id):
+        await safe_reply_text(message, "❌ Access denied. Only admins can remove admins.")
+        return
+
+    target_id = None
+    if message.reply_to_message and message.reply_to_message.from_user:
+        target_id = message.reply_to_message.from_user.id
+    else:
+        parts = message.text.split()
+        if len(parts) > 1 and parts[1].strip().lstrip("-").isdigit():
+            target_id = int(parts[1].strip())
+
+    if not target_id:
+        await safe_reply_text(
+            message,
+            "ℹ️ **How to Remove an Admin:**\n\n"
+            "• Option 1: Send `/deladmin <Telegram_User_ID>`\n"
+            "  *Example:* `/deladmin 1234567890`\n\n"
+            "• Option 2: Reply to the admin's message with `/deladmin`"
+        )
+        return
+
+    success, msg = admin_manager.remove_admin(target_id)
+    await safe_reply_text(message, msg)
+
+@main_bot.on_message(filters.command(["admins", "adminlist"]) & filters.private)
+async def list_admins_handler(client: Client, message: Message):
+    caller_id = message.from_user.id if message.from_user else 0
+    if not is_admin(caller_id):
+        await safe_reply_text(message, "❌ Access denied. Only admins can view the admin list.")
+        return
+
+    summary = admin_manager.get_all_admins_summary()
+    owners = summary.get("primary_owners", [])
+    dynamic = summary.get("dynamic_admins", [])
+
+    text = "🛡 **TG Drive Bot Admins**\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    text += "👑 **Primary Owner(s) (Environment):**\n"
+    if owners:
+        for oid in owners:
+            text += f"• `{oid}` (Super Admin)\n"
+    else:
+        text += "• *(None in TELEGRAM_ADMIN_IDS)*\n"
+
+    text += "\n👥 **Additional Admins (Added via Bot):**\n"
+    if dynamic:
+        for idx, adm in enumerate(dynamic, 1):
+            uid = adm.get("user_id")
+            by = adm.get("added_by", "Owner")
+            at = adm.get("added_at", "")
+            text += f"{idx}. `{uid}` (Added by `{by}` on `{at}`)\n"
+    else:
+        text += "• *No additional admins added yet. Use /addadmin <id> to add.*\n"
+
+    text += f"\n📊 **Total Active Admins:** `{summary.get('total_count', 0)}`\n"
+    text += "\n💡 *Use /addadmin <id> to add or /deladmin <id> to remove.*"
+    await safe_reply_text(message, text)
+
+# Manual IMDb search command
+@main_bot.on_message(filters.command("imdb") & filters.private)
+async def imdb_search_handler(client: Client, message: Message):
+    caller_id = message.from_user.id if message.from_user else 0
+    if not is_admin(caller_id):
+        await safe_reply_text(message, "❌ Access denied.")
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await safe_reply_text(message, "ℹ️ **Usage:** `/imdb <Movie or Series Name>`\n*Example:* `/imdb Inception 2010`")
+        return
+
+    query = parts[1].strip()
+    status_msg = await safe_reply_text(message, f"🔍 Searching IMDb for `{query}`...")
+
+    imdb_info = await get_imdb_info(query)
+    if not imdb_info:
+        await safe_edit_text(status_msg, f"❌ No IMDb results found for `{query}`.")
+        return
+
+    caption = (
+        f"🎬 **{imdb_info.get('title')} ({imdb_info.get('year')})**\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⭐ **IMDb Rating:** `{imdb_info.get('rating', 'N/A')}/10`\n"
+        f"🎭 **Genre:** `{imdb_info.get('genre', 'N/A')}`\n"
+        f"⏳ **Runtime:** `{imdb_info.get('runtime', 'N/A')}`\n"
+        f"🗣 **Language:** `{imdb_info.get('language', 'N/A')}`\n"
+        f"🎬 **Director:** `{imdb_info.get('director', 'N/A')}`\n"
+        f"🌟 **Cast:** `{imdb_info.get('actors', 'N/A')}`\n\n"
+        f"📖 **Plot:** _{imdb_info.get('plot', 'N/A')}_\n"
+    )
+
+    buttons = []
+    if imdb_info.get("imdb_url"):
+        buttons.append([InlineKeyboardButton("🍿 View on IMDb", url=imdb_info["imdb_url"])])
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+
+    if imdb_info.get("poster"):
+        try:
+            await message.reply_photo(photo=imdb_info["poster"], caption=caption, reply_markup=markup)
+            await status_msg.delete()
+            return
+        except Exception as e:
+            logger.warning(f"Could not send IMDb photo: {e}")
+
+    await safe_edit_text(status_msg, caption, reply_markup=markup)
+
 # File handler for all Telegram media types
 @main_bot.on_message(
     filters.private
@@ -316,14 +462,14 @@ async def stats_handler(client: Client, message: Message):
 async def file_handler(client: Client, message: Message):
     """
     Receives file in bot mode, stores in Telegram channel, registers in TG Drive,
-    and returns Direct Download, Video/Audio Stream, and Drive Web links directly to the user!
+    and returns Direct Download, Video/Audio Stream, IMDb info, and Drive Web links directly to the user!
     """
     global BOT_MODE, DRIVE_DATA
     user_id = message.from_user.id if message.from_user else 0
     if not is_admin(user_id):
         await safe_reply_text(
             message,
-            f"❌ **Upload Access Denied**\n\nYour Telegram User ID is `{user_id}`.\nPlease add this ID to `TELEGRAM_ADMIN_IDS` in your environment variables to allow file uploads."
+            f"❌ **Upload Access Denied**\n\nYour Telegram User ID is `{user_id}`.\nAsk an admin to run `/addadmin {user_id}` or add your ID to `TELEGRAM_ADMIN_IDS` in environment variables."
         )
         return
 
@@ -363,18 +509,59 @@ async def file_handler(client: Client, message: Message):
             ".mp4", ".mkv", ".webm", ".mov", ".avi", ".ts", ".ogv", ".mp3", ".m4a", ".wav", ".ogg", ".flac"
         ])
 
-        if base_url:
-            download_url = f"{base_url}/file?path={file_path}"
-            stream_url = f"{base_url}/stream?path={file_path}"
-            folder_url = f"{base_url}/?path={current_folder}"
+        download_url = f"{base_url}/file?path={file_path}" if base_url else ""
+        stream_url = f"{base_url}/stream?path={file_path}" if base_url else ""
+        folder_url = f"{base_url}/?path={current_folder}" if base_url else ""
 
-            keyboard_buttons = [
-                [InlineKeyboardButton("📥 Direct Download", url=download_url)]
-            ]
+        # Check IMDb metadata for movies / series
+        imdb_info = None
+        if getattr(config, "ENABLE_IMDB", True) and is_streamable:
+            try:
+                imdb_info = await get_imdb_info(file_name)
+            except Exception as e:
+                logger.warning(f"Error fetching IMDb info for {file_name}: {e}")
+
+        # Construct Keyboard Buttons
+        keyboard_buttons = []
+        if base_url:
+            keyboard_buttons.append([InlineKeyboardButton("📥 Direct Download", url=download_url)])
             if is_streamable:
                 keyboard_buttons.append([InlineKeyboardButton("🎬 Stream Online", url=stream_url)])
             keyboard_buttons.append([InlineKeyboardButton("📂 Open In Web Drive", url=folder_url)])
 
+        if imdb_info and imdb_info.get("imdb_url"):
+            keyboard_buttons.append([InlineKeyboardButton("🍿 IMDb Info", url=imdb_info["imdb_url"])])
+
+        reply_markup = InlineKeyboardMarkup(keyboard_buttons) if keyboard_buttons else None
+
+        # Build response text with or without IMDb
+        if imdb_info:
+            reply_text = format_imdb_caption(
+                imdb_info=imdb_info,
+                file_name=file_name,
+                file_size_str=formatted_size,
+                download_url=download_url,
+                stream_url=stream_url if is_streamable else "",
+                folder_name=current_folder_name,
+            )
+
+            # Try to send with poster image if available
+            if imdb_info.get("poster"):
+                try:
+                    await message.reply_photo(
+                        photo=imdb_info["poster"],
+                        caption=reply_text,
+                        reply_markup=reply_markup,
+                    )
+                    await status_msg.delete()
+                    return
+                except Exception as e:
+                    logger.warning(f"Could not reply with poster photo: {e}")
+
+            # Fallback if no poster or photo send failed
+            await safe_edit_text(status_msg, reply_text, reply_markup=reply_markup)
+
+        elif base_url:
             reply_text = (
                 f"✅ **File Uploaded Successfully!**\n\n"
                 f"📄 **File Name:** `{file_name}`\n"
@@ -389,7 +576,7 @@ async def file_handler(client: Client, message: Message):
             await safe_edit_text(
                 status_msg,
                 reply_text,
-                reply_markup=InlineKeyboardMarkup(keyboard_buttons),
+                reply_markup=reply_markup,
             )
         else:
             # Fallback if WEBSITE_URL is not set in .env

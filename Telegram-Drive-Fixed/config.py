@@ -61,3 +61,8 @@ TELEGRAM_ADMIN_IDS = []
 for _aid in _raw_admin_ids.replace(" ", "").split(","):
     if _aid.isdigit():
         TELEGRAM_ADMIN_IDS.append(int(_aid))
+
+# IMDb / OMDb API Key for automatic Movie & Series posters, ratings and synopsis
+# Get a free key at: https://www.omdbapi.com/apikey.aspx
+IMDB_API_KEY = os.getenv("IMDB_API_KEY", os.getenv("OMDB_API_KEY", "")).strip()
+ENABLE_IMDB = os.getenv("ENABLE_IMDB", "True").strip().lower() in ("true", "1", "yes")

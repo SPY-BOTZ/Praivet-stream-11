@@ -1,170 +1,205 @@
-# TGDrive - A Google Drive Clone with Telegram Storage
+# 🚀 TG Drive - High-Speed Telegram Cloud Drive & Streaming Suite
 
-Welcome to TGDrive! This web application replicates Google Drive's functionalities using Telegram as its storage backend. Manage folders and files, perform actions like uploading, renaming, and deleting, utilize trash/bin support, enable permanent deletion, and share public links. The application offers admin login and automatically backs up the database to Telegram.
+> **A Complete Google Drive & Streaming Web Platform powered by Telegram Storage, FastAPI, Multi-Bot Engine, Auto IMDb Movie Poster/Rating Integration, Dynamic Admin Management, and Real-Time View Analytics.**
 
-**Check out the [TGDrive Personal](https://github.com/TechShreyash/TGDrivePersonal) project for local desktop backup support.**
+---
 
-## Features
+## 🌟 Key Features / Mukhy Khasiyat
 
-- **File Management:** Upload, rename, and delete files with integrated trash/bin functionality and permanent deletion support.
-- **Folder Management:** Easily create, rename, and delete folders.
-- **Sharing:** Seamlessly share public links for files and folders.
-- **Admin Support:** Secure admin login for efficient management.
-- **Automatic Backups:** Automated database backups sent directly to Telegram.
-- **Multiple Bots/Clients:** Support for multiple bots/clients for file operations and streaming from Telegram.
-- **Large File Support:** Upload files up to 4GB using Telegram Premium accounts.
-- **Auto Pinger:** Built-in feature to keep the website active by preventing idle timeouts.
-- **URL Upload Support:** Upload files directly to TG Drive from any direct download link of a file.
-- **Bot Mode:** Upload files directly to any folder in TG Drive by sending the file to the bot on Telegram ([Know More](#tg-drives-bot-mode))
+1. 📂 **Google Drive Clone Web UI:**
+   - Full-featured web interface to browse folders, view files, upload, rename, move, delete, and manage trash/bin.
+   - Beautiful dark mode modern dashboard.
 
-## Tech Stack
+2. 🎬 **Direct Online Streaming & Fast Download Links:**
+   - Instant HTML5 video/audio player (`/stream?path=...`) with seek support, range requests, and high throughput.
+   - High-speed direct download link (`/file?path=...`) for any file format.
 
-- **Backend:** Python, FastAPI
-- **Frontend:** HTML, CSS, JavaScript
-- **Database:** Local storage as a class object, saved to a file using the pickle module.
-- **Storage:** Telegram
+3. 🤖 **Interactive Telegram Bot Mode:**
+   - Send or forward any video, document, photo, or audio directly to your Telegram bot.
+   - Bot automatically saves the file to your TG Drive web folder and immediately replies with **Direct Download Link**, **Online Streaming Link**, and **Web Folder Location**!
 
-### Environment Variables
+4. 🍿 **Automatic IMDb Poster & Metadata Fetcher:**
+   - When you upload any movie or web series file, the bot automatically cleans the filename, extracts the title & year, and fetches:
+     - 🌟 **Official Poster** (sent directly as photo preview)
+     - ⭐ **IMDb Rating** (e.g. `8.8/10`)
+     - 🎭 **Genres** (Action, Sci-Fi, Drama)
+     - ⏳ **Runtime & Duration**
+     - 🗣 **Languages & Country**
+     - 🎬 **Director & Top Cast**
+     - 📖 **Storyline / Plot Synopsis**
+     - 🍿 **IMDb.com Direct Web Link Button**
+   - Supports both `IMDB_API_KEY` (OMDb API) and free fallback so it always displays rich metadata!
+   - Manual `/imdb <title>` command to search any movie anytime.
 
-#### Required Variables
+5. 🛡 **Dynamic Multi-Admin Management System:**
+   - Add or remove admins directly via Telegram without restarting your server or editing environment variables!
+   - `/addadmin <user_id>`: Add a new admin (or reply to a user's message with `/addadmin`).
+   - `/deladmin <user_id>`: Remove an admin (or reply with `/deladmin`).
+   - `/admins`: View all Primary Owners (from `TELEGRAM_ADMIN_IDS`) and dynamic bot admins.
+   - Admins are persistently saved in `cache/admins.json`.
 
-| Variable Name            | Type    | Example                   | Description                                                          |
-| ------------------------ | ------- | ------------------------- | -------------------------------------------------------------------- |
-| `API_ID`                 | integer | 123456                    | Your Telegram API ID                                                 |
-| `API_HASH`               | string  | dagsjdhgjfsahgjfh         | Your Telegram API Hash                                               |
-| `BOT_TOKENS`             | string  | 21413535:gkdshajfhjfakhjf | List of Telegram bot tokens for file operations, separated by commas |
-| `STORAGE_CHANNEL`        | integer | -100123456789             | Chat ID of the Telegram storage channel                              |
-| `DATABASE_BACKUP_MSG_ID` | integer | 123                       | Message ID of a file in the storage channel for database backups     |
+6. 📊 **Member View Tracking & Real-Time Analytics:**
+   - Track how many members viewed/streamed or downloaded each file!
+   - View total view counts, top-viewed files, and recent stream access logs (including timestamp, file name, and IP address).
+   - Check analytics via Telegram bot (`/stats` or `/views`) or in the Web Dashboard.
 
-> Note: All bots mentioned in the `BOT_TOKENS` variable must be added as admins in your `STORAGE_CHANNEL`.
+7. ⚡ **Multi-Bot Worker Pooling & 4GB Telegram Premium Support:**
+   - Add multiple bot tokens in `BOT_TOKENS` to distribute streaming traffic across multiple worker bots (prevents Telegram rate limits).
+   - Add Pyrogram string sessions in `STRING_SESSIONS` to upload files up to **4 GB**!
 
-> Note: `DATABASE_BACKUP_MSG_ID` should be the message ID of a file (document) in the `STORAGE_CHANNEL`.
+8. 🔄 **Automated Telegram Database Backup:**
+   - Automatically serializes and backs up your drive metadata to your Telegram storage channel at configurable intervals (`DATABASE_BACKUP_TIME`).
+   - Auto-recovers on server restarts.
 
-#### Optional Variables
+---
 
-| Variable Name          | Type                 | Default                                    | Description                                                                                                 |
-| ---------------------- | -------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `ADMIN_PASSWORD`       | string               | admin                                      | Password for accessing the admin panel                                                                      |
-| `STRING_SESSIONS`      | string               | None                                       | List of Premium Telegram Account Pyrogram String Sessions for file operations                               |
-| `SLEEP_THRESHOLD`      | integer (in seconds) | 60                                         | Delay in seconds before retrying after a Telegram API floodwait error                                       |
-| `DATABASE_BACKUP_TIME` | integer (in seconds) | 60                                         | Interval in seconds for database backups to the storage channel                                             |
-| `MAX_FILE_SIZE`        | float (in GBs)       | 1.98 (3.98 if `STRING_SESSIONS` are added) | Maximum file size (in GBs) allowed for uploading to Telegram                                                |
-| `WEBSITE_URL`          | string               | None                                       | Website URL (with https/http) to auto-ping to keep the website active                                       |
-| `MAIN_BOT_TOKEN`       | string               | None                                       | Your Main Bot Token to use [TG Drive's Bot Mode](#tg-drives-bot-mode)                                       |
-| `TELEGRAM_ADMIN_IDS`   | string               | None                                       | List of Telegram User IDs of admins who can access the [bot mode](#tg-drives-bot-mode), separated by commas |
+## ⚙️ Environment Variables Guide / Sabhi Settings
 
-> Note: Premium Client (`STRING_SESSIONS`) will be used only to upload files when file size is greater than 2GB.
+Sabhi environment variables ko `.env` file mein ya Koyeb / Heroku / VPS ke Environment Settings mein set karein:
 
-> Note: File streaming/downloads will be handled by bots (`BOT_TOKENS`).
+| Variable Name | Required? | Example Value | Description (English & Hindi) |
+|---|---|---|---|
+| `API_ID` | **Yes** | `12345678` | Telegram API ID from [my.telegram.org](https://my.telegram.org) |
+| `API_HASH` | **Yes** | `a1b2c3d4e5f6g7h8...` | Telegram API Hash from [my.telegram.org](https://my.telegram.org) |
+| `MAIN_BOT_TOKEN` | **Yes** | `6789012345:AA...` | Bot token for the main interactive Bot Mode (from [@BotFather](https://t.me/BotFather)) |
+| `BOT_TOKENS` | **Yes** | `6789012345:AA...,6789012346:BB...` | Comma-separated bot tokens used as download/stream workers |
+| `STORAGE_CHANNEL` | **Yes** | `-1001234567890` | Telegram Channel ID where files and backups are stored (Bot must be Admin!) |
+| `DATABASE_BACKUP_MSG_ID`| **Yes** | `2` | Message ID of any file/document sent to `STORAGE_CHANNEL` for storing database backups |
+| `WEBSITE_URL` | **Yes** | `https://your-app.koyeb.app` | Public URL of your deployed website (Direct Download & Stream links isi URL par bante hain) |
+| `TELEGRAM_ADMIN_IDS` | Recommended | `123456789,987654321` | Comma-separated Telegram User IDs of Primary Owners who have access to the bot |
+| `IMDB_API_KEY` | Recommended | `1a2b3c4d` | OMDb / IMDb API Key for movie posters & ratings (Get free at [omdbapi.com](https://www.omdbapi.com/apikey.aspx)) |
+| `ENABLE_IMDB` | Optional | `True` | `True` to enable automatic IMDb details on video upload, `False` to disable |
+| `ADMIN_PASSWORD` | Optional | `admin` | Password for web drive admin panel (default: `admin`) |
+| `STRING_SESSIONS` | Optional | `BQ...` | Pyrogram String Session for 4GB uploads (Telegram Premium account) |
+| `DATABASE_BACKUP_TIME` | Optional | `60` | Backup interval in seconds (default: 60) |
+| `SLEEP_THRESHOLD` | Optional | `60` | Delay in seconds before retrying Telegram FloodWait (default: 60) |
 
-> Note: Read more about TG Drive's Bot Mode [here](#tg-drives-bot-mode).
+---
 
-## Deploying Your Own TG Drive Application
+## 🤖 All Bot Commands & Examples / Sabhi Bot Commands
 
-### 1. Clone the Repository
+### 1. Basic & Help
+- `/start` or `/help`
+  - Bot ka welcome message, quick navigation buttons, aur Web Drive ka direct link dikhata hai.
+  - Agar unauthorized user bheje to unka Telegram User ID dikhata hai taaki aap unhe admin bana sakein.
 
-First, clone the repository and navigate into the project directory:
+### 2. Folder Navigation
+- `/set_folder`
+  - Bot aapse poochega ki agle files kis folder mein save karni hain.
+  - Folder ka naam bhejein aur select karein. Sabhi nayi files usi folder mein jaayengi.
+- `/current_folder`
+  - Dikhata hai ki abhi upload folder kaun sa active hai.
+
+### 3. IMDb Movie Information (New!)
+- Automatic on file upload:
+  - Jab bhi aap koi video ya movie file (`.mkv`, `.mp4`, etc.) bhejenge, bot automatically title aur year pehchan kar:
+    - 🖼 **Official Movie Poster Photo**
+    - ⭐ **IMDb Rating**
+    - 🎭 **Genre & Runtime**
+    - 🎬 **Director & Cast**
+    - 📖 **Plot Storyline**
+    - 📥 **Direct Download Button**
+    - 🎬 **Stream Online Button**
+    - 🍿 **IMDb Web Page Button**
+- Manual Command:
+  - `/imdb <Movie or Series Name>`
+  - *Example:* `/imdb Inception 2010`
+  - *Example:* `/imdb Oppenheimer`
+  - *Example:* `/imdb Breaking Bad`
+  - Kisi bhi movie ka poster, cast aur rating turant search karne ke liye.
+
+### 4. Admin Management (New!)
+- `/addadmin <Telegram_User_ID>`
+  - Naye user ko bot admin banata hai.
+  - *Example:* `/addadmin 987654321`
+  - *Alternative:* Kisi bhi user ke message ko reply karke `/addadmin` bhejein.
+- `/deladmin <Telegram_User_ID>` (ya `/removeadmin`)
+  - Admin ko remove karta hai.
+  - *Example:* `/deladmin 987654321`
+  - *Alternative:* Admin ke message ko reply karke `/deladmin` bhejein.
+- `/admins`
+  - Sabhi active admins ki list dikhata hai (Primary Owners + dynamically added admins).
+
+### 5. Views & Analytics
+- `/stats` (ya `/views`)
+  - Total Files, Total Views/Streams, Total Downloads, Most Viewed Files list, aur Recent Member streaming access logs dikhata hai.
+
+---
+
+## 🔑 How to Get a Free IMDb / OMDb API Key
+
+1. Go to [https://www.omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx)
+2. Select **FREE (1,000 daily requests)**.
+3. Enter your email and name, then click **Submit**.
+4. Check your email inbox to verify the key.
+5. Add the key in your Koyeb environment variables:
+   ```env
+   IMDB_API_KEY=your_key_here
+   ```
+*(Note: Agar aap key nahi bhi daalte hain, tab bhi bot ke paas free fallback system hai jo title, year, poster aur IMDb web link automatically dikhayega!)*
+
+---
+
+## 🚀 Deployment Guide / Kaise Deploy Karein
+
+### Option 1: Koyeb (Recommended)
+
+1. Fork ya Push karein ye repo apne GitHub par (`SPY-BOTZ/Praivet-stream-11`).
+2. [Koyeb.com](https://app.koyeb.com/) par login karein.
+3. **Create Service** par click karein -> **GitHub**.
+4. Apni repository select karein.
+5. Builder: **Dockerfile** (Root directory wala `Dockerfile` auto-detect hoga).
+6. **Environment Variables** add karein:
+   - `API_ID`
+   - `API_HASH`
+   - `MAIN_BOT_TOKEN`
+   - `BOT_TOKENS`
+   - `STORAGE_CHANNEL`
+   - `DATABASE_BACKUP_MSG_ID`
+   - `WEBSITE_URL` (Jaise: `https://your-app.koyeb.app`)
+   - `TELEGRAM_ADMIN_IDS` (Aapka Telegram ID)
+   - `IMDB_API_KEY` (Optional)
+7. **Deploy** par click karein! Koyeb automatically build karke live kar dega.
+
+### Option 2: Docker / VPS
 
 ```bash
-git clone https://github.com/TechShreyash/TGDrive
-cd TGDrive
+# Clone the repository
+git clone https://github.com/SPY-BOTZ/Praivet-stream-11.git
+cd Praivet-stream-11
+
+# Copy sample env and edit credentials
+cp sample.env .env
+nano .env
+
+# Build and run Docker container
+docker build -t tgdrive .
+docker run -d -p 8000:8000 --name tgdrive-app tgdrive
 ```
 
-### 2. Set Up Your Environment Variables
+---
 
-Create a `.env` file in the root directory and add the necessary [environment variables](#environment-variables).
+## 📁 Project Architecture / Files Structure
 
-> **Note:** Some hosting services allow you to set environment variables directly through their interface, which may eliminate the need for a `.env` file.
+```
+├── Dockerfile                  # Production Docker container definition
+├── requirements.txt            # Python dependencies (FastAPI, Pyrogram, Uvicorn, aiohttp)
+├── config.py                   # Global configuration & environment variable parser
+├── main.py                     # FastAPI web server, streaming routes, analytics endpoints
+├── sample.env                  # Example environment file with full comments
+├── utils/
+│   ├── bot_mode.py             # Interactive Telegram bot handler, commands & file upload
+│   ├── admin_manager.py        # Dynamic persistent admin management (/addadmin, /deladmin)
+│   ├── imdb_helper.py          # Automatic movie title cleaning & IMDb poster/rating fetcher
+│   ├── directoryHandler.py     # Drive hierarchy, file indexing & Telegram cloud backup
+│   ├── clients.py              # Multi-bot worker initialization & pooling
+│   └── streamer/               # Custom streaming engine with video byte-range support
+└── website/                    # Web drive frontend assets (HTML, CSS, JS)
+```
 
-### 3. Running TG Drive
+---
 
-#### Deploying Locally
+## 🤝 Support & Contribution
 
-1. Install the required Python packages:
-
-   ```bash
-   pip install -U -r requirements.txt
-   ```
-
-2. Start the TG Drive application using Uvicorn:
-
-   ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000
-   ```
-
-#### Deploying Using Docker
-
-1. Build the Docker image:
-
-   ```bash
-   docker build -t tgdrive .
-   ```
-
-2. Run the Docker container:
-
-   ```bash
-   docker run -d -p 8000:8000 tgdrive
-   ```
-
-Access the application at `http://127.0.0.1:8000` or `http://your_ip:8000`.
-
-> **Note:** For more detailed information on deploying FastAPI applications, refer to online guides and resources.
-
-## Deploy Tutorials
-
-**Deploy To Render.com For Free :** https://youtu.be/S5OIi5Ur3c0
-
-<div align="center">
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/TechShreyash/TGDrive)
-
-</div>
-
-> **Note:** After updating the TG Drive code, clear your browser's cache to ensure the latest JavaScript files are loaded and run correctly.
-
-## TG Drive's Bot Mode
-
-TG Drive's Bot Mode is a new feature that allows you to upload files directly to your TG Drive website from a Telegram bot. Simply send or forward any file to the bot, and it will be uploaded to your TG Drive. You can also specify the folder where you want the files to be uploaded.
-
-To use this feature, you need to set the configuration variables `MAIN_BOT_TOKEN` and `TELEGRAM_ADMIN_IDS`. More information about these variables can be found in the [optional variables section](#optional-variables).
-
-Once these variables are set, users whose IDs are listed in `TELEGRAM_ADMIN_IDS` will have access to the bot.
-
-### Bot Commands
-
-- `/set_folder` - Set the folder for file uploads
-- `/current_folder` - Check the current folder
-
-### Quick Demo
-
-Bot Mode - Youtube Video Tutorial : https://youtu.be/XSeY2XcHdGI
-
-#### Uploading Files
-
-1. Open your main bot in Telegram.
-2. Send or forward a file to this bot, and it will be uploaded. By default, the file will be uploaded to the root folder (home page).
-
-#### Changing Folder for Uploading
-
-1. Send the `/set_folder` command and follow the instructions provided by the bot.
-
-## Important Posts Regarding TG Drive
-
-Stay informed by joining our updates channel on Telegram: [@TechZBots](https://telegram.me/TechZBots). We post updates, guides, and tips about TG Drive there.
-
-- https://telegram.me/TechZBots/891
-- https://telegram.me/TechZBots/876
-- https://telegram.me/TechZBots/874
-- https://telegram.me/TechZBots/870
-
-## Contributing
-
-Contributions are welcome! Fork the repository, make your changes, and create a pull request.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Support
-
-For inquiries or support, join our [Telegram Support Group](https://telegram.me/TechZBots_Support) or email [techshreyash123@gmail.com](mailto:techshreyash123@gmail.com).
+Agar koi issue aaye ya new feature chahiye to issue create karein.
+Full support for Python 3.10+, Pyrogram (Kurigram), FastAPI, and Uvicorn.
